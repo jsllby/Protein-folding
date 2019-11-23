@@ -12,13 +12,13 @@ import chainer
 
 def evaluate(env, agent):
     actions = []
-    env.reset()
+    state = env.reset("HHHHHH")
     done = False
     while not done:
-        state = env.state_index
-        action = agent.select_action(state, explore=False)
+        action = agent.act(state)
+        state, reward, done = env.step(action)
         actions.append(action)
-        next_state, reward, done = env.step(action)
+        # next_state, reward, done = env.step(action)
     return reward, actions
 
 
@@ -90,7 +90,7 @@ def create_agent(env):
 
     agent = DDQN.DoubleDQN(q_func, opt, rbuf, gamma=0.99,
                            explorer=explorer, replay_start_size=replay_start_size,
-                           target_update_interval=10,  # target q网络多久和q网络同步
+                           target_update_interval=10,
                            update_interval=update_interval,
                            phi=phi, minibatch_size=minibatch_size)
     return agent
@@ -98,19 +98,19 @@ def create_agent(env):
 
 if __name__ == '__main__':
     grid_size = 21  # odd value
-    max_episode = 10000
+    max_episode = 100
     collision_penalty = 1
     trap_penalty = 10
     min_learn_size = 10
     learn_step = 10
-    seq = "HPHPHPHHPP"
+    seq = "HHHHHH"
 
     env = Env(grid_size, collision_penalty, trap_penalty)
     agent = create_agent(env)
 
     steps = 0
     for episode in range(max_episode):
-        # print("episode:{}".format(episode))
+        print("episode:{}".format(episode))
         state = env.reset(seq)
         done = False
         reward = 0
@@ -118,6 +118,7 @@ if __name__ == '__main__':
             action = agent.act_and_train(state, reward)
             state, reward, done = env.step(action)
             steps += 1
-            print(steps)
+            # print(steps)
         agent.stop_episode_and_train(state, reward, done)
-
+    reward, _ = evaluate(env, agent)
+    print(reward)
