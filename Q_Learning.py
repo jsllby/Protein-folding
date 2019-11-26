@@ -9,7 +9,7 @@ class Q_Learning:
         self.lr = 0.01
         self.max_epsilon = 1
         self.min_epsilon = 0.3
-        self.decay_steps = 2000
+        self.decay_steps = 100000
         self.discount = 0.9
         self.actions = [0, 1, 2, 3]
         self.steps = 0
@@ -28,6 +28,16 @@ class Q_Learning:
         best_a = None
         for a in self.actions:
             if self.Q[(state, a)] > best_q:
+                best_q = self.Q[(state, a)]
+                best_a = a
+        self.steps += 1
+        return best_a
+
+    def select_action_without_explore(self, state, actions):
+        best_q = float('-inf')
+        best_a = None
+        for a in self.actions:
+            if self.Q[(state, a)] > best_q and a not in actions:
                 best_q = self.Q[(state, a)]
                 best_a = a
         self.steps += 1
@@ -74,14 +84,13 @@ class Env:
                 self.done = True
                 reward = (-len(self.seq) + len(self.state)) * self.trap_penalty - self.free_energy()
             else:
-                reward = 0
+                reward = 0.1
+            if self.state_index == -1:
+                self.state_index = 0
+            else:
+                self.state_index = 4 * self.state_index + 1 + action
         else:
             reward = -self.collision_penalty
-
-        if self.state_index == -1:
-            self.state_index = 0
-        else:
-            self.state_index = 4 * self.state_index + 1 + action
 
         return self.state_index, reward, self.done
 
@@ -160,15 +169,21 @@ class Env:
 
 
 def evaluate(env, agent):
+    # print("start evaluation")
     actions = []
     env.reset()
     done = False
     reward = None
+    invalid = set()
     while not done:
         state = env.state_index
-        action = agent.select_action(state, explore=False)
+        action = agent.select_action_without_explore(state, invalid)
         actions.append(action)
         next_state, reward, done = env.step(action)
+        if next_state == state:
+            invalid.add(action)
+        else:
+            invalid = set()
     return reward, len(actions)
 
 
@@ -193,24 +208,27 @@ learn_step = 5000
 
 # initial enviroment
 env = Env(grid_size, collision_penalty, trap_penalty)
+evaluate_interval = 1000
+data = [("hhppppphhppphppphp", 4), ("hphphhhppphhhhpphh", 8), ("phpphphhhphhphhhhh", 9), ("hphpphhphpphphhpphph", 9),
+        ("hhhpphphphpphphphpph", 10)]
+# data = [("hhhh",1)]
+for seq, opt in data:
+    env.setSeq(seq)
+    agent = Q_Learning()
 
-env.setSeq("hhppppphhppphppphp")
-# initial agent
-agent = Q_Learning()
-
-step = 0
-evaluate_interval = 10000
-for episode in range(max_episode):
-    env.reset()  # env generates a random sequence
-    done = False
-    reward = None
-    while not done:
-        state = env.state_index
-        action = agent.select_action(state)
-        next_state, reward, done = env.step(action)
-        agent.store_transition(state, action, next_state, reward)
-        step += 1
-    if episode % evaluate_interval == 0 and done:
-        reward, _ = evaluate(env, agent)
-        print("episode {}, reward = {}".format(episode, reward))
-print(evaluate(env, agent))
+    step = 0
+    for episode in range(max_episode):
+        env.reset()  # env generates a random sequence
+        done = False
+        reward = None
+        while not done:
+            state = env.state_index
+            action = agent.select_action(state)
+            next_state, reward, done = env.step(action)
+            agent.store_transition(state, action, next_state, reward)
+            step += 1
+        if episode % evaluate_interval == 0 and done:
+            reward, _ = evaluate(env, agent)
+            print("episode {}, reward = {}".format(episode, reward))
+    reward, _ = evaluate(env, agent)
+    print("seq = {}, reward = {}, optimal reward = {}".format(seq, reward, opt))
