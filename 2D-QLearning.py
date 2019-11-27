@@ -1,6 +1,7 @@
 import collections
 import math
 import random
+import matplotlib.pyplot as plt
 
 
 class Q_Learning:
@@ -168,7 +169,7 @@ class Env:
         return consecutive_h - adjacent_h // 2
 
 
-def evaluate(env, agent):
+def evaluate(env, agent, episode):
     # print("start evaluation")
     actions = []
     env.reset()
@@ -184,6 +185,37 @@ def evaluate(env, agent):
             invalid.add(action)
         else:
             invalid = set()
+
+    state = env.state
+    x = []
+    y = []
+    xrange = [env.grid_size, 0]
+    yrange = [env.grid_size, 0]
+    for (i, j), value in state.items():
+        x.append(i)
+        y.append(j)
+        xrange[0] = min(xrange[0], i)
+        xrange[1] = max(xrange[1], i)
+        yrange[0] = min(yrange[0], j)
+        yrange[1] = max(yrange[1], j)
+        if value == 1:
+            plt.scatter(i, j, c='b', s=160, zorder=2)
+            for dx, dy in [[-1, 0], [1, 0], [0, 1], [0, -1]]:
+                cx, cy = i + dx, j + dy
+                if state.get((cx, cy), 0) == 1:
+                    plt.plot([i, cx], [j, cy], linewidth=3, color='r', zorder=1)
+        else:
+            plt.scatter(i, j, c='g', s=160, zorder=2)
+
+    plt.plot(x, y, linewidth=3, color='black', zorder=1)
+    plt.grid()
+    plt.axis('scaled')
+    size = 5
+    plt.xticks(range(min(xrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, xrange[1]) + 1, 1))
+    plt.yticks(range(min(yrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, yrange[1]) + 1, 1))
+    plt.title("episode: {}, reward: {}".format(episode, reward))
+    plt.show()
+
     return reward, len(actions)
 
 
@@ -200,7 +232,7 @@ def generate_seq(max_length=20, prob=0.5):
 
 
 grid_size = 21 * 2 + 1  # odd value
-max_episode = 1000000
+max_episode = 500000
 collision_penalty = 1
 trap_penalty = 5
 min_learn_size = 10
@@ -208,10 +240,10 @@ learn_step = 5000
 
 # initial enviroment
 env = Env(grid_size, collision_penalty, trap_penalty)
-evaluate_interval = 1000
-data = [("hhppppphhppphppphp", 4), ("hphphhhppphhhhpphh", 8), ("phpphphhhphhphhhhh", 9), ("hphpphhphpphphhpphph", 9),
-        ("hhhpphphphpphphphpph", 10)]
-# data = [("hhhh",1)]
+evaluate_interval = 10000
+# data = [("hhppppphhppphppphp", 4), ("hphphhhppphhhhpphh", 8), ("phpphphhhphhphhhhh", 9), ("hphpphhphpphphhpphph", 9),
+#         ("hhhpphphphpphphphpph", 10)]
+data = [("hphphhhppphhhhpphh", 10)]
 for seq, opt in data:
     env.setSeq(seq)
     agent = Q_Learning()
@@ -228,7 +260,7 @@ for seq, opt in data:
             agent.store_transition(state, action, next_state, reward)
             step += 1
         if episode % evaluate_interval == 0 and done:
-            reward, _ = evaluate(env, agent)
+            reward, _ = evaluate(env, agent, episode)
             print("episode {}, reward = {}".format(episode, reward))
-    reward, _ = evaluate(env, agent)
+    reward, _ = evaluate(env, agent, episode + 1)
     print("seq = {}, reward = {}, optimal reward = {}".format(seq, reward, opt))
