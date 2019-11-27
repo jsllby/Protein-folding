@@ -140,18 +140,35 @@ class Env:
 
         self.done = False
 
-    def render(self):
-        for x in range(self.grid_size):
-            for y in range(self.grid_size):
-                cur = self.state.get((x, y), 0)
-                if cur == 1:
-                    print('H', end=' ')
-                elif cur == -1:
-                    print('P', end=' ')
-                else:
-                    print('*', end=' ')
+    def render(self, reward):
+        x = []
+        y = []
+        xrange = [self.grid_size, 0]
+        yrange = [self.grid_size, 0]
+        for (i, j), value in self.state.items():
+            x.append(i)
+            y.append(j)
+            xrange[0] = min(xrange[0], i)
+            xrange[1] = max(xrange[1], i)
+            yrange[0] = min(yrange[0], j)
+            yrange[1] = max(yrange[1], j)
+            if value == 1:
+                plt.scatter(i, j, c='b', s=160, zorder=2)
+                for dx, dy in [[-1, 0], [1, 0], [0, 1], [0, -1]]:
+                    cx, cy = i + dx, j + dy
+                    if self.state.get((cx, cy), 0) == 1:
+                        plt.plot([i, cx], [j, cy], linewidth=3, color='r', zorder=1)
+            else:
+                plt.scatter(i, j, c='g', s=160, zorder=2)
 
-            print()
+        plt.plot(x, y, linewidth=3, color='black', zorder=1)
+        plt.grid()
+        plt.axis('scaled')
+        size = 5
+        plt.xticks(range(min(xrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, xrange[1]) + 1, 1))
+        plt.yticks(range(min(yrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, yrange[1]) + 1, 1))
+        plt.title("episode: {}, reward: {}".format(episode, reward))
+        plt.show()
 
     def free_energy(self):
         consecutive_h = 0
@@ -186,36 +203,7 @@ def evaluate(env, agent, episode):
         else:
             invalid = set()
 
-    state = env.state
-    x = []
-    y = []
-    xrange = [env.grid_size, 0]
-    yrange = [env.grid_size, 0]
-    for (i, j), value in state.items():
-        x.append(i)
-        y.append(j)
-        xrange[0] = min(xrange[0], i)
-        xrange[1] = max(xrange[1], i)
-        yrange[0] = min(yrange[0], j)
-        yrange[1] = max(yrange[1], j)
-        if value == 1:
-            plt.scatter(i, j, c='b', s=160, zorder=2)
-            for dx, dy in [[-1, 0], [1, 0], [0, 1], [0, -1]]:
-                cx, cy = i + dx, j + dy
-                if state.get((cx, cy), 0) == 1:
-                    plt.plot([i, cx], [j, cy], linewidth=3, color='r', zorder=1)
-        else:
-            plt.scatter(i, j, c='g', s=160, zorder=2)
-
-    plt.plot(x, y, linewidth=3, color='black', zorder=1)
-    plt.grid()
-    plt.axis('scaled')
-    size = 5
-    plt.xticks(range(min(xrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, xrange[1]) + 1, 1))
-    plt.yticks(range(min(yrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, yrange[1]) + 1, 1))
-    plt.title("episode: {}, reward: {}".format(episode, reward))
-    plt.show()
-
+    env.render(reward)
     return reward, len(actions)
 
 
