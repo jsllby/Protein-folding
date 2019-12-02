@@ -9,6 +9,7 @@ class Env:
         self.dirs = [[-1, 0], [0, 1], [1, 0], [0, -1]]
         self.collision_penalty = collision_penalty
         self.trap_penalty = trap_penalty
+        self.state = np.zeros((self.grid_size, self.grid_size))
 
     def is_trapped(self):
         for dx, dy in self.dirs:
@@ -88,8 +89,8 @@ class Env:
         self.set_seq(seq)
         self.cur_index = 0
         self.cur_position = None  # the position of the last molecule added
-        self.state = np.zeros((self.grid_size, self.grid_size))
         self.done = False
+        self.state = np.zeros((self.grid_size, self.grid_size))
         return self.state.reshape((1, -1)).squeeze()
 
     def render(self):

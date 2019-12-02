@@ -3,6 +3,9 @@ import math
 import random
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
+import extract_seq
+import numpy as np
+import seaborn as sns
 
 
 class Q_Learning:
@@ -70,8 +73,8 @@ class Env:
         return True
 
     def step(self, action):
-        if not self.cur_position:
-            x = y = z = self.grid_size // 2
+        if self.cur_index <= 0:
+            x, y, z = self.initial_positions[self.cur_index]
         else:
             x = self.dirs[action][0] + self.cur_position[0]
             y = self.dirs[action][1] + self.cur_position[1]
@@ -122,13 +125,19 @@ class Env:
                 seq += "H"
         return seq
 
-    def setSeq(self, seq):
+    def setSeq(self, seq, positions):
+        self.labels = []
         self.seq = []
+        cur = 1
         for i in seq:
             if i == 'H' or i == 'h':
                 self.seq.append(1)
+                self.labels.append(str(cur) + "-H")
             else:
                 self.seq.append(-1)
+                self.labels.append(str(cur) + "-P")
+            cur += 1
+        self.initial_positions = positions
 
     def getNext(self):
         return self.seq[self.cur_index]
@@ -142,7 +151,32 @@ class Env:
 
         self.done = False
 
-    def render(self, reward):
+    def render_heatmap(self, predict=True):
+        n = len(self.seq)
+        dist = np.zeros((n, n))
+        if not predict:
+            positions = self.initial_positions
+        else:
+            positions = []
+            for (x, y, z), value in self.state.items():
+                positions.append([x, y, z])
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                temp = np.sqrt(np.sum(np.square(np.array(positions[i]) - np.array(positions[j]))))
+                dist[i][j] = temp
+                dist[j][i] = temp
+        ax = sns.heatmap(dist, cmap="YlGnBu", square=True, xticklabels=self.labels, yticklabels=self.labels)
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+        bottom, top = ax.get_ylim()
+        ax.set_ylim(bottom + 0.5, top - 0.5)
+        if predict:
+            plt.title("Prediction")
+        else:
+            plt.title("2D Grid")
+        plt.show()
+
+    def render_structure(self, reward, episode, marker):
         fig = plt.figure()
         axes3d = Axes3D(fig)
 
@@ -162,25 +196,50 @@ class Env:
             yrange[1] = max(yrange[1], j)
             zrange[0] = min(zrange[0], k)
             zrange[1] = max(zrange[1], k)
-            if value == 1:
-                axes3d.scatter(i, j, k, c='b', s=90, zorder=2)
-                for dx, dy, dz in [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]:
-                    cx, cy, cz = i + dx, j + dy, k + dz
-                    if self.state.get((cx, cy, cz), 0) == 1:
-                        plt.plot([i, cx], [j, cy], [k, cz], linewidth=3, color='r', zorder=1)
-            else:
-                axes3d.scatter(i, j, k, c='g', s=90, zorder=2)
+            if marker:
+                if value == 1:
+                    axes3d.scatter(i, j, k, c='b', s=90, zorder=2)
+                    for dx, dy, dz in [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]:
+                        cx, cy, cz = i + dx, j + dy, k + dz
+                        if self.state.get((cx, cy, cz), 0) == 1:
+                            plt.plot([i, cx], [j, cy], [k, cz], linewidth=3, color='r', zorder=1)
+                else:
+                    axes3d.scatter(i, j, k, c='g', s=90, zorder=2)
 
-        axes3d.plot(x, y, z, linewidth=3, color='black', zorder=1)
-        # axes3d.axis('scaled')
-        size = 5
-        axes3d.set_xticks(
-            range(min(xrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, xrange[1]) + 1, 1))
-        axes3d.set_yticks(
-            range(min(yrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, yrange[1]) + 1, 1))
-        axes3d.set_zticks(
-            range(min(zrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, zrange[1]) + 1, 1))
-        plt.title("episode: {}, reward: {}".format(episode, reward))
+        axes3d.plot(x, y, z, linewidth=3, color='black', zorder=1, label="prediction")
+
+        # x = []
+        # y = []
+        # z = []
+        # for t in range(len(self.initial_positions)):
+        #     i, j, k = self.initial_positions[t]
+        #     value = self.seq[t]
+        #     x.append(i)
+        #     y.append(j)
+        #     z.append(k)
+        #     xrange[0] = min(xrange[0], i)
+        #     xrange[1] = max(xrange[1], i)
+        #     yrange[0] = min(yrange[0], j)
+        #     yrange[1] = max(yrange[1], j)
+        #     zrange[0] = min(zrange[0], k)
+        #     zrange[1] = max(zrange[1], k)
+        #     if marker:
+        #         if value == 1:
+        #             axes3d.scatter(i, j, k, c='deepskyblue', s=90, zorder=2)
+        #         else:
+        #             axes3d.scatter(i, j, k, c='lightgreen', s=90, zorder=2)
+        #
+        # axes3d.plot(x, y, z, linewidth=3, color='red', zorder=1, label="2D grid structure")
+        #
+        # size = 5
+        # axes3d.set_xticks(
+        #     range(min(xrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, xrange[1]) + 1, 1))
+        # axes3d.set_yticks(
+        #     range(min(yrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, yrange[1]) + 1, 1))
+        # axes3d.set_zticks(
+        #     range(min(zrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, zrange[1]) + 1, 1))
+        # plt.title("episode: {}, reward: {}".format(episode, reward))
+        # plt.legend()
         plt.show()
 
     def free_energy(self):
@@ -199,7 +258,7 @@ class Env:
         return consecutive_h - adjacent_h // 2
 
 
-def evaluate(env, agent, episode):
+def evaluate(env, agent, episode, marker=True):
     # print("start evaluation")
     actions = []
     env.reset()
@@ -216,7 +275,8 @@ def evaluate(env, agent, episode):
         else:
             invalid = set()
 
-    env.render(reward)
+    # env.render(reward, episode, marker)
+    env.render_heatmap(predict=True)
     return reward, len(actions)
 
 
@@ -233,25 +293,28 @@ def generate_seq(max_length=20, prob=0.5):
 
 
 grid_size = 21 * 2 + 1  # odd value
-max_episode = 50000
+max_episode = 100000
 collision_penalty = 1
 trap_penalty = 5
 min_learn_size = 10
 learn_step = 5000
 
-# initial enviroment
-env = Env(grid_size, collision_penalty, trap_penalty)
-evaluate_interval = 1000
-# data = [("hhppppphhppphppphp", 4), ("hphphhhppphhhhpphh", 8), ("phpphphhhphhphhhhh", 9), ("hphpphhphpphphhpphph", 9),
-#         ("hhhpphphphpphphphpph", 10)]
-data = [("hpppphhhhh", 10)]
-for seq, opt in data:
-    env.setSeq(seq)
+if __name__ == '__main__':
+    # data = [("hhppppphhppphppphp", 4), ("hphphhhppphhhhpphh", 8), ("phpphphhhphhphhhhh", 9), ("hphpphhphpphphhpphph", 9),
+    #         ("hhhpphphphpphphphpph", 10)]
+
+    env = Env(grid_size, collision_penalty, trap_penalty)
+    evaluate_interval = 10000
+
+    seq, positions, real_positions = extract_seq.get_data(spacing=3.7, start=[env.grid_size // 2, env.grid_size // 2,
+                                                                              env.grid_size // 2],
+                                                          file='1fat.pdb')
+    env.setSeq(seq[:20], positions[:20])
     agent = Q_Learning()
 
     step = 0
     for episode in range(max_episode):
-        env.reset()  # env generates a random sequence
+        env.reset()
         done = False
         reward = None
         while not done:
@@ -260,8 +323,10 @@ for seq, opt in data:
             next_state, reward, done = env.step(action)
             agent.store_transition(state, action, next_state, reward)
             step += 1
-        if episode % evaluate_interval == 0 and done:
-            reward, _ = evaluate(env, agent, episode)
-            print("episode {}, reward = {}".format(episode, reward))
-    reward, _ = evaluate(env, agent, episode + 1)
-    print("seq = {}, reward = {}, optimal reward = {}".format(seq, reward, opt))
+        # if episode % evaluate_interval == 0 and done:
+        #     reward, _ = evaluate(env, agent, episode, marker=False)
+        #     print("episode {}, reward = {}".format(episode, reward))
+    reward, _ = evaluate(env, agent, max_episode, marker=False)
+    print("seq = {}, reward = {}".format(seq, reward))
+
+    env.render_heatmap(predict=False)
