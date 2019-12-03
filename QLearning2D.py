@@ -165,8 +165,8 @@ class Env:
         plt.grid()
         plt.axis('scaled')
         size = 5
-        plt.xticks(range(min(xrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, xrange[1]) + 1, 1))
-        plt.yticks(range(min(yrange[0], env.grid_size // 2 - size), max(env.grid_size // 2 + size, yrange[1]) + 1, 1))
+        plt.xticks(range(min(xrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, xrange[1]) + 1, 1))
+        plt.yticks(range(min(yrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, yrange[1]) + 1, 1))
         plt.title("episode: {}, reward: {}".format(episode, reward))
         plt.show()
 

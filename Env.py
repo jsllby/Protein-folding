@@ -1,5 +1,6 @@
 import random
 import collections
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -9,13 +10,12 @@ class Env:
         self.dirs = [[-1, 0], [0, 1], [1, 0], [0, -1]]
         self.collision_penalty = collision_penalty
         self.trap_penalty = trap_penalty
-        self.state = np.zeros((self.grid_size, self.grid_size))
 
     def is_trapped(self):
         for dx, dy in self.dirs:
             x = self.cur_position[0] + dx
             y = self.cur_position[1] + dy
-            if self.state[x][y] == 0:
+            if self.hp[x][y] == 0:
                 return False
         return True
 
@@ -29,7 +29,7 @@ class Env:
             x = self.dirs[action][0] + self.cur_position[0]
             y = self.dirs[action][1] + self.cur_position[1]
 
-        if self.state[x][y] == 0:
+        if self.hp[x][y] == 0:
             self.append(x, y)
             if self.cur_index == len(self.seq):
                 self.done = True
@@ -38,14 +38,18 @@ class Env:
                 self.done = True
                 reward = -(len(self.seq) - self.cur_index) * self.trap_penalty - self.free_energy()
             else:
-                reward = 0
+                reward = 0.1
         else:
             reward = -self.collision_penalty
 
-        return self.state.reshape((1, -1)).squeeze(), reward, self.done
+        return self.get_state(), reward, self.done
 
     def append(self, x, y):
-        self.state[x][y] = self.seq[self.cur_index]
+        if self.cur_position:
+            self.pos[self.cur_position[0]][self.cur_position[1]] = 0
+        self.hp[x][y] = self.seq[self.cur_index]
+        self.pos[x][y] = self.seq[self.cur_index]
+        self.order[(x, y)] = self.seq[self.cur_index]
         self.cur_index += 1
         self.cur_position = [x, y]
 
@@ -86,33 +90,56 @@ class Env:
         return self.seq[self.cur_index]
 
     def reset(self, seq):
+        self.hp = np.zeros((self.grid_size, self.grid_size))
+        self.order = collections.OrderedDict()
+        self.pos = np.zeros((self.grid_size, self.grid_size))
         self.set_seq(seq)
         self.cur_index = 0
         self.cur_position = None  # the position of the last molecule added
         self.done = False
-        self.state = np.zeros((self.grid_size, self.grid_size))
-        return self.state.reshape((1, -1)).squeeze()
+        return self.get_state()
 
-    def render(self):
-        for x in range(self.grid_size):
-            for y in range(self.grid_size):
-                if self.state[x][y] == 1:
-                    print('H', end=' ')
-                elif self.state[x][y] == -1:
-                    print('P', end=' ')
-                else:
-                    print('*', end=' ')
+    def get_state(self):
+        return np.array([self.hp, self.pos])
 
-            print()
+    def render(self,episode,reward):
+        x = []
+        y = []
+        xrange = [self.grid_size, 0]
+        yrange = [self.grid_size, 0]
+        for (i, j), value in self.order.items():
+            x.append(i)
+            y.append(j)
+            xrange[0] = min(xrange[0], i)
+            xrange[1] = max(xrange[1], i)
+            yrange[0] = min(yrange[0], j)
+            yrange[1] = max(yrange[1], j)
+            if value == 1:
+                plt.scatter(i, j, c='b', s=160, zorder=2)
+                for dx, dy in [[-1, 0], [1, 0], [0, 1], [0, -1]]:
+                    cx, cy = i + dx, j + dy
+                    if self.order.get((cx, cy), 0) == 1:
+                        plt.plot([i, cx], [j, cy], linewidth=3, color='r', zorder=1)
+            else:
+                plt.scatter(i, j, c='g', s=160, zorder=2)
+
+        plt.plot(x, y, linewidth=3, color='black', zorder=1)
+        plt.grid()
+        plt.axis('scaled')
+        size = 5
+        plt.xticks(range(min(xrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, xrange[1]) + 1, 1))
+        plt.yticks(range(min(yrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, yrange[1]) + 1, 1))
+        plt.title("episode: {}, reward = {}".format(episode,reward))
+        plt.show()
 
     def free_energy(self):
         adjacent_h = 0
         for x in range(self.grid_size):
             for y in range(self.grid_size):
-                if self.state[x][y] == 1:
+                if self.hp[x][y] == 1:
                     for dx, dy in [[0, 1], [1, 0]]:
                         cx, cy = x + dx, y + dy
-                        if 0 <= cx < self.grid_size and 0 <= cy < self.grid_size and self.state[cx][cy] == 1:
+                        if 0 <= cx < self.grid_size and 0 <= cy < self.grid_size and self.hp[cx][cy] == 1:
                             adjacent_h += 1
 
         return self.consecutive_h - adjacent_h
