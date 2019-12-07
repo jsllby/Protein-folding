@@ -5,11 +5,12 @@ import numpy as np
 
 
 class Env:
-    def __init__(self, grid_size, collision_penalty, trap_penalty):
+    def __init__(self, grid_size, collision_penalty, trap_penalty, obs_size):
         self.grid_size = grid_size
         self.dirs = [[-1, 0], [0, 1], [1, 0], [0, -1]]
         self.collision_penalty = collision_penalty
         self.trap_penalty = trap_penalty
+        self.obs_size = obs_size
 
     def is_trapped(self):
         for dx, dy in self.dirs:
@@ -54,7 +55,7 @@ class Env:
         self.cur_position = [x, y]
 
     def generate_seq(self):
-        n = random.randint(1, 20)
+        n = random.randint(15, 22)
         seq = ""
         for i in range(n):
             p = random.random()
@@ -89,7 +90,9 @@ class Env:
     def get_next(self):
         return self.seq[self.cur_index]
 
-    def reset(self, seq):
+    def reset(self, seq=None):
+        if not seq:
+            seq = self.generate_seq()
         self.hp = np.zeros((self.grid_size, self.grid_size))
         self.order = collections.OrderedDict()
         self.pos = np.zeros((self.grid_size, self.grid_size))
@@ -100,9 +103,12 @@ class Env:
         return self.get_state()
 
     def get_state(self):
-        return np.array([self.hp, self.pos])
+        if not self.cur_position:
+            return np.zeros((1,self.obs_size * 2 + 1, self.obs_size * 2 + 1))
+        x, y = self.cur_position
+        return np.array([self.hp[x-self.obs_size:x+self.obs_size+1,y-self.obs_size:y+self.obs_size+1]])
 
-    def render(self,episode,reward):
+    def render(self, episode, reward):
         x = []
         y = []
         xrange = [self.grid_size, 0]
@@ -127,9 +133,9 @@ class Env:
         plt.grid()
         plt.axis('scaled')
         size = 5
-        plt.xticks(range(min(xrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, xrange[1]) + 1, 1))
-        plt.yticks(range(min(yrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, yrange[1]) + 1, 1))
-        plt.title("episode: {}, reward = {}".format(episode,reward))
+        plt.xticks(range(min(xrange[0], self.obs_size - size), max(self.obs_size + size, xrange[1]) + 1, 1))
+        plt.yticks(range(min(yrange[0], self.obs_size - size), max(self.obs_size + size, yrange[1]) + 1, 1))
+        plt.title("episode: {}, reward = {}".format(episode, reward))
         plt.show()
 
     def free_energy(self):

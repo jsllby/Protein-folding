@@ -1,7 +1,7 @@
 from Env import Env
 from chainerrl.agents import dqn as DQN
 from chainerrl import replay_buffer, explorers
-from chainer import optimizers
+from chainer import optimizers, Variable
 import numpy as np
 from chainerrl.action_value import DiscreteActionValue
 import chainer.functions as F
@@ -9,34 +9,53 @@ import chainer.links as L
 import chainer
 import functools
 
+grid_size = 20 * 2 + 1
+
 
 def evaluate(env, agent, episode):
-    actions = []
-    state = env.reset("hhppphh")
-    done = False
-    while not done:
-        action = agent.act(state)
-        state, reward, done = env.step(action)
-        actions.append(action)
-        if reward < 0:
-            break
-    env.render(episode, reward)
-    return reward, actions
+    data = [("hhppppphhppphppphp", 4), ("hphphhhppphhhhpphh", 8), ("phpphphhhphhphhhhh", 9),
+            ("hphpphhphpphphhpphph", 9),
+            ("hhhpphphphpphphphpph", 10)]
+    res = []
+    loss = []
+    for seq, opt in data:
+        collision = False
+        actions = []
+        state = env.reset(seq)
+        done = False
+        while not done:
+            action = agent.act(state)
+            state, reward, done = env.step(action)
+            actions.append(action)
+            if reward < 0:
+                collision = True
+                break
+        res.append(reward)
+        loss.append(opt - reward)
+    loss = np.mean(np.square(loss))
+    #     env.render(episode, reward)
+    return res, loss
 
 
 class QFunction(chainer.Chain):
     def __init__(self, obs_size, n_actions):
         super(QFunction, self).__init__()
         with self.init_scope():
-            self.conv = L.Convolution2D(None, 64, 3, 1, 1, nobias=True)
-            self.bn = L.BatchNormalization(64)
-            self.l2 = L.Linear(None, n_actions)
+            self.conv1 = L.Convolution2D(None, 64, 3)
+            self.bn1 = L.BatchNormalization(64)
+            self.conv2 = L.Convolution2D(None, 64, 3)
+            self.bn2 = L.BatchNormalization(64)
+            self.conv3 = L.Convolution2D(None, 64, 3)
+            self.bn3 = L.BatchNormalization(64)
+
+            self.l = L.Linear(None, 4)
 
     def forward(self, x):
-        # print(x.shape)
         """Compute Q-values of actions for given observations."""
-        h = F.relu(self.bn(self.conv(x)))
-        h = self.l2(h)
+        h = F.relu(self.bn1(self.conv1(x)))
+        h = F.relu(self.bn2(self.conv2(x)))
+        h = F.relu(self.bn3(self.conv3(x)))
+        h = self.l(h)
         return DiscreteActionValue(h)
 
 
@@ -70,20 +89,23 @@ def create_agent(env):
 
 
 if __name__ == '__main__':
-    grid_size = 7 * 2 + 1  # odd value
+    grid_size =100  # odd value
+    obs_size = 16
     max_episode = 100000
-    collision_penalty = 4
+    collision_penalty = 5
     trap_penalty = 10
     min_learn_size = 10
     learn_step = 10
-    seq = "hhppphh"
+    seq = "hhppphhh"
 
-    env = Env(grid_size, collision_penalty, trap_penalty)
+    env = Env(grid_size, collision_penalty, trap_penalty,obs_size)
     agent = create_agent(env)
 
+    print("start trainning")
     steps = 0
     for episode in range(max_episode):
-        state = env.reset(seq)
+        print("episode {}".format(episode))
+        state = env.reset()
         done = False
         reward = 0
         while not done:
@@ -94,6 +116,10 @@ if __name__ == '__main__':
         agent.stop_episode_and_train(state, reward, done)
         # print("episode {}".format(episode))
         if episode % 100 == 0:
-            reward, _ = evaluate(env, agent, episode)
-            print("episode:{}, reward = {}".format(episode, reward))
+            reward, loss = evaluate(env, agent, episode)
+            print("episode:{}, MSE = {}, rewards = {}".format(episode, loss, reward))
+    #             if collision:
+    #               print("episode:{}, reward = {}, collision".format(episode, reward))
+    #             else:
+    #               print("episode:{}, reward = {}".format(episode, reward))
     print(reward)

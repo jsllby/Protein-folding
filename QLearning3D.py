@@ -166,6 +166,9 @@ class Env:
                 temp = np.sqrt(np.sum(np.square(np.array(positions[i]) - np.array(positions[j]))))
                 dist[i][j] = temp
                 dist[j][i] = temp
+
+        max, min = dist.max(), dist.min()
+        dist = (dist - min) / (max - min)
         ax = sns.heatmap(dist, cmap="YlGnBu", square=True, xticklabels=self.labels, yticklabels=self.labels)
         ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
         bottom, top = ax.get_ylim()
@@ -275,7 +278,7 @@ def evaluate(env, agent, episode, marker=True):
         else:
             invalid = set()
 
-    # env.render(reward, episode, marker)
+    env.render_structure(reward, episode, marker)
     env.render_heatmap(predict=True)
     return reward, len(actions)
 
@@ -293,7 +296,7 @@ def generate_seq(max_length=20, prob=0.5):
 
 
 grid_size = 21 * 2 + 1  # odd value
-max_episode = 100000
+max_episode = 10000000
 collision_penalty = 1
 trap_penalty = 5
 min_learn_size = 10
@@ -304,7 +307,7 @@ if __name__ == '__main__':
     #         ("hhhpphphphpphphphpph", 10)]
 
     env = Env(grid_size, collision_penalty, trap_penalty)
-    evaluate_interval = 10000
+    evaluate_interval = 100000
 
     seq, positions, real_positions = extract_seq.get_data(spacing=3.7, start=[env.grid_size // 2, env.grid_size // 2,
                                                                               env.grid_size // 2],
@@ -323,9 +326,9 @@ if __name__ == '__main__':
             next_state, reward, done = env.step(action)
             agent.store_transition(state, action, next_state, reward)
             step += 1
-        # if episode % evaluate_interval == 0 and done:
-        #     reward, _ = evaluate(env, agent, episode, marker=False)
-        #     print("episode {}, reward = {}".format(episode, reward))
+        if episode % evaluate_interval == 0 and done:
+            reward, _ = evaluate(env, agent, episode, marker=False)
+            print("episode {}, reward = {}".format(episode, reward))
     reward, _ = evaluate(env, agent, max_episode, marker=False)
     print("seq = {}, reward = {}".format(seq, reward))
 
