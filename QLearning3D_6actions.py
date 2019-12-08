@@ -74,7 +74,10 @@ class Env:
 
     def step(self, action):
         if self.cur_index <= 0:
-            x, y, z = self.initial_positions[self.cur_index]
+            if self.initial_positions:
+                x, y, z = self.initial_positions[self.cur_index]
+            else:
+                x = y = z = self.grid_size // 2
         else:
             x = self.dirs[action][0] + self.cur_position[0]
             y = self.dirs[action][1] + self.cur_position[1]
@@ -125,7 +128,7 @@ class Env:
                 seq += "H"
         return seq
 
-    def setSeq(self, seq, positions):
+    def setSeq(self, seq, positions=None):
         self.labels = []
         self.seq = []
         cur = 1
@@ -138,6 +141,19 @@ class Env:
                 self.labels.append(str(cur) + "-P")
             cur += 1
         self.initial_positions = positions
+        if self.initial_positions:
+            self.cal_dist()
+
+    def cal_dist(self):
+        n = len(self.initial_positions)
+        dist = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i + 1, n):
+                temp = np.sqrt(
+                    np.sum(np.square(np.array(self.initial_positions[i]) - np.array(self.initial_positions[j]))))
+                dist[i][j] = temp
+                dist[j][i] = temp
+        self.initial_dist = dist
 
     def getNext(self):
         return self.seq[self.cur_index]
@@ -151,7 +167,7 @@ class Env:
 
         self.done = False
 
-    def render_heatmap(self, predict=True):
+    def render_heatmap(self, episode, losses, reward, predict=True):
         n = len(self.seq)
         dist = np.zeros((n, n))
         if not predict:
@@ -166,6 +182,10 @@ class Env:
                 temp = np.sqrt(np.sum(np.square(np.array(positions[i]) - np.array(positions[j]))))
                 dist[i][j] = temp
                 dist[j][i] = temp
+        if self.initial_positions:
+            loss = np.mean(np.square(dist - self.initial_dist))
+            losses.append(loss)
+            print("episode {}, loss = {}".format(episode, loss))
 
         max, min = dist.max(), dist.min()
         dist = (dist - min) / (max - min)
@@ -174,9 +194,12 @@ class Env:
         bottom, top = ax.get_ylim()
         ax.set_ylim(bottom + 0.5, top - 0.5)
         if predict:
-            plt.title("Prediction")
+            plt.title("episode" + str(episode) + " reward = " + str(reward))
+            pass
         else:
-            plt.title("2D Grid")
+            plt.title("distance of grid structure")
+
+        plt.savefig("episode" + str(episode) + ".jpg")
         plt.show()
 
     def render_structure(self, reward, episode, marker):
@@ -210,6 +233,8 @@ class Env:
                     axes3d.scatter(i, j, k, c='g', s=90, zorder=2)
 
         axes3d.plot(x, y, z, linewidth=3, color='black', zorder=1, label="prediction")
+        # axes3d.plot(self.initial_positions[:, 0], self.initial_positions[:, 1], self.initial_positions[:, 2],
+        #             linewidth=3, color='red', zorder=1, label="grid structure")
 
         # x = []
         # y = []
@@ -242,7 +267,9 @@ class Env:
         # axes3d.set_zticks(
         #     range(min(zrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, zrange[1]) + 1, 1))
         # plt.title("episode: {}, reward: {}".format(episode, reward))
-        # plt.legend()
+        plt.legend()
+        plt.title("episode " + str(episode) + " reward = " + str(reward))
+        plt.savefig("structure-" + str(episode) + ".jpg")
         plt.show()
 
     def free_energy(self):
@@ -261,7 +288,7 @@ class Env:
         return consecutive_h - adjacent_h // 2
 
 
-def evaluate(env, agent, episode, marker=True):
+def evaluate(env, agent, episode, losses, marker=True):
     # print("start evaluation")
     actions = []
     env.reset()
@@ -279,7 +306,7 @@ def evaluate(env, agent, episode, marker=True):
             invalid = set()
 
     env.render_structure(reward, episode, marker)
-    env.render_heatmap(predict=True)
+    env.render_heatmap(episode, losses, reward, predict=True)
     return reward, len(actions)
 
 
@@ -296,9 +323,9 @@ def generate_seq(max_length=20, prob=0.5):
 
 
 grid_size = 21 * 2 + 1  # odd value
-max_episode = 10000000
-collision_penalty = 1
-trap_penalty = 5
+max_episode = 200000
+collision_penalty = 5
+trap_penalty = 10
 min_learn_size = 10
 learn_step = 5000
 
@@ -307,14 +334,19 @@ if __name__ == '__main__':
     #         ("hhhpphphphpphphphpph", 10)]
 
     env = Env(grid_size, collision_penalty, trap_penalty)
-    evaluate_interval = 100000
+    evaluate_interval = 1000
 
-    seq, positions, real_positions = extract_seq.get_data(spacing=3.7, start=[env.grid_size // 2, env.grid_size // 2,
-                                                                              env.grid_size // 2],
-                                                          file='1fat.pdb')
-    env.setSeq(seq[:20], positions[:20])
+    # seq, positions, real_positions = extract_seq.get_data(spacing=1, start=[env.grid_size // 2, env.grid_size // 2,
+    #                                                                         env.grid_size // 2],
+    #                                                       file='1fat.pdb')
+
+    seq = "HHHHPPHHHHHHHPPPH"
+    # seq = "HPHPPHHPHPPHPHHPPHPH"
+    env.setSeq(seq)
     agent = Q_Learning()
 
+    # env.render_heatmap(-1, [], 0, predict=False)
+    losses = []
     step = 0
     for episode in range(max_episode):
         env.reset()
@@ -327,9 +359,15 @@ if __name__ == '__main__':
             agent.store_transition(state, action, next_state, reward)
             step += 1
         if episode % evaluate_interval == 0 and done:
-            reward, _ = evaluate(env, agent, episode, marker=False)
+            reward, _ = evaluate(env, agent, episode, losses, marker=True)
             print("episode {}, reward = {}".format(episode, reward))
-    reward, _ = evaluate(env, agent, max_episode, marker=False)
+    reward, _ = evaluate(env, agent, max_episode, losses, marker=True)
     print("seq = {}, reward = {}".format(seq, reward))
 
-    env.render_heatmap(predict=False)
+    # env.render_heatmap(0, [], reward, predict=False)
+
+    print(losses)
+    plt.ylabel("mse")
+    plt.plot(losses)
+    plt.savefig("losses.jpg")
+    plt.show()

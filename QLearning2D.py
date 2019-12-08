@@ -168,6 +168,7 @@ class Env:
         plt.xticks(range(min(xrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, xrange[1]) + 1, 1))
         plt.yticks(range(min(yrange[0], self.grid_size // 2 - size), max(self.grid_size // 2 + size, yrange[1]) + 1, 1))
         plt.title("episode: {}, reward: {}".format(episode, reward))
+        plt.savefig("plot/episode"+str(episode)+".jpg")
         plt.show()
 
     def free_energy(self):

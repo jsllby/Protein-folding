@@ -9,7 +9,9 @@ import chainer.links as L
 import chainer
 import functools
 
-grid_size = 20 * 2 + 1
+grid_size = 100
+obs_size = 16
+minibatch_size = 16
 
 
 def evaluate(env, agent, episode):
@@ -48,10 +50,16 @@ class QFunction(chainer.Chain):
             self.conv3 = L.Convolution2D(None, 64, 3)
             self.bn3 = L.BatchNormalization(64)
 
+            self.lstm = L.LSTM(None,128)
+
             self.l = L.Linear(None, 4)
 
     def forward(self, x):
         """Compute Q-values of actions for given observations."""
+        x1 = x[:, 0, :, :].reshape((-1, 1, obs_size * 2 + 1, obs_size * 2 + 1))
+        x2 = x[:, 1, :, :].reshape((-1, (obs_size * 2 + 1) ** 2))
+        if x2.shape[0] == 1:
+            x2 = np.tile(x2, (minibatch_size, 1))
         h = F.relu(self.bn1(self.conv1(x)))
         h = F.relu(self.bn2(self.conv2(x)))
         h = F.relu(self.bn3(self.conv3(x)))
@@ -72,7 +80,6 @@ def create_agent(env):
     opt.setup(q_func)
 
     rbuf_capacity = 5 * 10 ** 3
-    minibatch_size = 16
 
     steps = 50000
     replay_start_size = 20
@@ -89,8 +96,7 @@ def create_agent(env):
 
 
 if __name__ == '__main__':
-    grid_size =100  # odd value
-    obs_size = 16
+
     max_episode = 100000
     collision_penalty = 5
     trap_penalty = 10
@@ -98,7 +104,7 @@ if __name__ == '__main__':
     learn_step = 10
     seq = "hhppphhh"
 
-    env = Env(grid_size, collision_penalty, trap_penalty,obs_size)
+    env = Env(grid_size, collision_penalty, trap_penalty, obs_size)
     agent = create_agent(env)
 
     print("start trainning")
@@ -115,7 +121,7 @@ if __name__ == '__main__':
             # print(action,done)
         agent.stop_episode_and_train(state, reward, done)
         # print("episode {}".format(episode))
-        if episode % 100 == 0:
+        if episode % 10 == 0:
             reward, loss = evaluate(env, agent, episode)
             print("episode:{}, MSE = {}, rewards = {}".format(episode, loss, reward))
     #             if collision:
